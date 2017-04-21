@@ -17,3 +17,5 @@ The code enables the RPi2 to
 
 5) Display and annunciate the interpreted action on the Rx RPi2 using a Wolfram notebook, SerialListenDisplay.nb, or an Adafruit SSD1306 OLED display physically connected via  SPI interface.
 
+The two zip files now contain software for the sender and receiver respectively.
+The sender contains RunILOCIv0.9Sim.nb and the receiver contains SerialListenDisplay.nb so that the two RPi2's can be setup to exchange simulated data without the analog mcp3008 chip and board attached to the sender.  The bluetooth adapters were purchased from Amazon, Kinivo BTD-400 Bluetooth 4.0 USB Adapter for Windows 10 / 8.1 / 8 / 7 / Vista
