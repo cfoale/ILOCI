@@ -1,7 +1,7 @@
 # ILOCI
 Imminent Loss of Control Identification as applied to a Lambada motorglider 
 
-A project using machine learning and computationa thinking with Wolfram Mathematica on the Raspberry Pi 2 (RPi2)
+A project using machine learning and computational thinking with Wolfram Mathematica on the Raspberry Pi 2 (RPi2)
 
 Code is provided to operate on the Raspberry Pi Linux distribution Wheezy
 
@@ -22,7 +22,7 @@ The sender contains RunILOCIv0.9Sim.nb and the receiver contains SerialListenDis
 
 4/24/2017  For testing the classifier without the MCP3008 SPI interface, a test flight data file 2016_6_25_28.dat is provided.  
 
-Use the notebook ILOCITrainingVerificationSets-Test7.nbto create the ILOCITest7Classifier.m classifier file with the data file.
+Use the notebook ILOCITrainingVerificationSets-Test7.nb to create the ILOCITest7Classifier.m classifier file with the data file.
 
 The data file can be played back to the RECEIVER, over Bluetooth, using the SENDER notebook ReRunILOCIv0.9.nb.  
 
