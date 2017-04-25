@@ -1,0 +1,38 @@
+Pi Notes:
+
+
+For wlan and eth0 config see:
+http://raspberrypi.stackexchange.com/questions/8851/setting-up-wifi-and-ethernet
+
+/etc/network/interfaces does get both etho and wlan0 to work, but not simo, and wlan0 does not always come up. 
+to get wlan,  Restart, shift dongle to other usb..it works 1 in 3 times..Having wlan0 above eth0 seems to consistently enable wlan, if the ethernet is not active.
+
+To edit config:  sudo raspi-config
+To edit  screen: sudo nano /boot/config.txt
+
+sudo apt-get update
+sudo apt-get upgrade
+
+For compiling c projects, and MathLink install Geany
+
+sudo apt-get install geany
+
+Under Geany, for Build options, after loading debugger plugin, use the -g debug switch IN FRONT OF the -o switch.  NOT in the compile line.
+
+To auto start a wolfram script that runs Bluetooth, MCP3008 drivers and then waits for connect with the server on the receiver use the file called startwolfram..
+
+Autostart at bootup of wolfram script
+
+sudo nano /etc/init.d/startwolfram
+
+make edit changes, e.g. sudo wolfram -script Run3ChannelIFIv1.m
+
+sudo chmod +x /etc/init.d/startwolfram
+
+test using:
+/etc/init.d/startwolfram start
+Ctrl C to quit
+
+to incorporate into startup:
+sudo update-rc.d startwolfram defaults
+

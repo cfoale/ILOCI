@@ -1,0 +1,31 @@
+### BEGIN INIT INFO
+# Provides: startwolfram
+# Required-Start: $remote_fs $syslog $network
+# Required-Stop: $remote_fs $syslog $network
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Run Wolfram Script
+# Description: Run Wolfram Script runpython.m
+### END INIT INFO
+
+#! /bin/sh
+# /etc/init.d/startwolfram
+
+export HOME
+case "$1" in
+  start)
+    echo "Starting Wolfram script runpython.m"
+    sudo wolfram -script /home/pi/Mathematica/runpython.m &
+  ;;
+stop)
+  echo "Stopping Wolfram script"
+  PID=`ps auxwww | grep wolfram | head -1 | awk '{print $2}'`
+  kill -9 $PID
+  ;;
+*)
+  echo "Usage: /etc/init.d/startwolfram {start|stop}"
+  exit 1
+;;
+esac
+exit 0
+

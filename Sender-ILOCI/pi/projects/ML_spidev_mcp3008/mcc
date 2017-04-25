@@ -1,0 +1,1201 @@
+#! /bin/sh
+
+## begin copyright #######################################################
+#
+#                        Mathematica source file
+#
+#        Copyright 1986 through 2012 by Wolfram Research Inc.
+#
+#         Program: mcc - Mathematica MathLink Template Compiler
+#        Language: Bourne Shell
+#
+######################################################### end copyright ##
+
+mcc_name="Wolfram Mathematica MathLink Template Compiler"
+
+# Define mcc_verbose here so that it is visible in all the function definitions
+mcc_verbose="no"
+mcc_verbose_log="/tmp/mcc_verbose_$$.log"
+
+# find_mldk_dir
+# The function searches for the path to the MathLink Developer Kit CompilerAdditions directory
+#
+# Returns: a string with the path to the mcc directory
+find_mldk_dir()
+{
+spath=`expr "$0"'/' : '\(/\)[^/]*//*$' \| "$0"'/' : \
+            '\(.*[^/]\)//*[^/][^/]*//*$' \| .`
+
+if [ "." = "$spath" ]; then
+   MLPATH=`pwd`
+else
+   if [ ".`(echo $spath | grep \"^/\")`" = ".$spath" ]; then
+      MLPATH="$spath"
+   else
+      MLPATH="`pwd`/$spath"
+   fi
+fi
+echo ${MLPATH}
+}
+
+
+# find_default_C_compiler
+# The function uses a list of default C compilers and searches all the
+# directories available from $PATH for a compiler
+#
+# Arguments:
+#        $1 - The platform ID (the result of `uname`)
+#
+# Returns: a string containing the path to the discovered C compiler
+find_default_C_compiler()
+{
+if [ "$1" = "Darwin" ] ; then
+	c_compilers="clang gcc cc"
+elif [ "$1" = "Linux" ] ; then
+	c_compilers="gcc cc"
+elif [ "$1" = "SunOS" ] ; then
+	c_compilers="cc gcc"
+	PATH="/opt/SUNWspro/bin:"${PATH}
+elif [ "$1" = "CYGWIN" ] ; then
+	c_compilers="gcc cc"
+fi
+
+path_dirs=`echo $PATH | sed -e 's/:/ /g'`
+
+for p in ${path_dirs}; do
+	for c in ${c_compilers} ; do
+		if [ -x "${p}/${c}" ] ; then
+			c_compiler="${p}/${c}"
+			break
+		fi
+	done
+	if [ ! -z "${c_compiler}" ] ; then
+		break
+	fi
+done
+
+echo ${c_compiler}
+}
+
+
+# find_default_CXX_compiler
+# The function uses a list of default C++ compilers and searches all the
+# directories available from $PATH for a compiler
+#
+# Arguments:
+#        $1 - The platform ID (the result of `uname`)
+#
+# Returns: a string containing the path to the discovered C++ compiler
+find_default_CXX_compiler()
+{
+if [ "$1" = "Darwin" ] ; then
+	cxx_compilers="clang++ g++ c++"
+elif [ "$1" = "Linux" ] ; then
+	cxx_compilers="g++ c++"
+elif [ "$1" = "SunOS" ] ; then
+	cxx_compilers="CC g++"
+	PATH="/opt/SUNWspro/bin:"${PATH}
+elif [ `expr "$1" : '\(CYGWIN\)'` = "CYGWIN" ] ; then
+	cxx_compilers="g++ c++"
+fi
+
+path_dirs=`echo $PATH | sed -e 's/:/ /g'`
+
+for p in ${path_dirs}; do
+	for c in ${cxx_compilers} ; do
+		if [ -x "${p}/${c}" ] ; then
+			cxx_compiler="${p}/${c}"
+			break
+		fi
+	done
+	
+	if [ ! -z "${cxx_compiler}" ] ; then
+		break
+	fi
+done
+
+echo ${cxx_compiler}
+}
+
+
+# find_compilers
+# The function checks $CC and $CXX first for compilers.  If
+# $CC and/or $CXX are not set the function calls find_default_C_compiler
+# and/or find_default_CXX_compiler to locate a suitable compiler
+#
+# Arguments
+#       $1 - The platform ID (the result of `uname`)
+#       $2 - String of either "C" or "C++" indicating which compiler value
+#            to return
+#
+# Returns: either a string containing the path to the located C compiler
+#          or the located C++ compiler
+find_compilers()
+{
+if [ ! -z "${CC}" ] ; then
+	c_compiler=${CC}
+else
+	c_compiler=`find_default_C_compiler $1`
+fi
+
+if [ ! -z "${CXX}" ] ; then
+	cxx_compiler=${CXX}
+else
+	cxx_compiler=`find_default_CXX_compiler $1`
+fi
+
+if [ "$2" = "C" ] ; then
+	echo ${c_compiler}
+elif [ "$2" = "C++" ] ; then
+	echo ${cxx_compiler}
+fi
+}
+
+
+# This script compiles a test program multiple times on all platforms
+# in order to test various compiler options and features.  The program
+# is a C++ program and tests the C++ compiler.
+
+# Name of the compiled test program
+test_program_name="/tmp/mcctest_$$"
+
+# Intermediate source file name for the test program source
+test_program_source="/tmp/mcctest_$$.cc"
+
+# Various string values used in the test program and later in this script
+sparc="sparc"
+i386="i386"
+x86_64="x86_64"
+ppc="ppc"
+ppc64="ppc64"
+workshop="workshop"
+studio8="studio8"
+studio10="studio10"
+studio11="studio11"
+studio12="studio12"
+gcc3="gcc3"
+gcc4_0="gcc4_0"
+gcc4_1="gcc4_1"
+gcc4_2="gcc4_2"
+clang2="clang2"
+clang3="clang3"
+clang4="clang4"
+clang5="clang5"
+
+bit32="32"
+bit64="64"
+bit3264="32/64"
+
+
+# The source of the C++ test program.  The test program supports two
+# command line options:
+#       -a --arch - returns the architecture of the current platform
+#                   eg sparc, i386, x86_64, etc...
+#
+#       -c --compiler - returns the compiler id string of the compiler
+#                       used to build the test program eg workshop
+#                       (Sun Workshop), studiox(Sun Studio X), gcc3
+#                       (gcc 3.x), etc...
+test_program=\
+"
+#include <iostream>\n
+\n
+#define SPARC \"${sparc}\"\n
+#define I386 \"${i386}\"\n
+#define X86_64 \"${x86_64}\"\n
+#define PPC \"${ppc}\"\n
+#define PPC64 \"${ppc64}\"\n
+\n
+#define WORKSHOP \"${workshop}\"\n
+#define STUDIO8 \"${studio8}\"\n
+#define STUDIO10 \"${studio10}\"\n
+#define STUDIO11 \"${studio11}\"\n
+#define STUDIO12 \"${studio12}\"\n
+#define GCC3 \"${gcc3}\"\n
+#define GCC4_0 \"${gcc4_0}\"\n
+#define GCC4_1 \"${gcc4_1}\"\n
+#define GCC4_2 \"${gcc4_2}\"\n
+#define CLANG2 \"${clang2}\"\n
+#define CLANG3 \"${clang3}\"\n
+#define CLANG4 \"${clang4}\"\n
+#define CLANG5 \"${clang5}\"\n
+\n
+#define UNKNOWN \"unknown\"\n
+\n
+#if defined(__GNUC__)\n
+#\tif defined(__GNUC_PATCHLEVEL__)\n
+#\t\tdefine GCC_VERSION (__GNUC__ \* 10000 +\ \n
+\t\t\t\t\t\t __GNUC_MINOR__ \* 100 \ \n
+\t\t\t\t\t\t+ __GNUC_PATCHLEVEL__)\n
+#\telse\n
+#\t\tdefine GCC_VERSION (__GNUC__ \* 10000 +\ \n
+\t\t\t\t\t\t+ __GNUC_MINOR__ \* 100)\n
+#\tendif\n
+#endif\n
+\n
+\n
+#if __sun || __sun__ || sun\n
+#\tif __SUNPRO_CC < 0x550\n
+#\t\tdefine COMPILER WORKSHOP 1\n
+#\telif __SUNPRO_CC == 0x550\n
+#\t\tdefine COMPILER STUDIO8\n
+#\telif __SUNPRO_CC == 0x570\n
+#\t\tdefine COMPILER STUDIO10\n
+#\telif __SUNPRO_CC == 0x580\n
+#\t\tdefine COMPILER STUDIO11\n
+#\telif __SUNPRO_CC == 0x590\n
+#\t\tdefine COMPILER STUDIO12\n
+#\telif GCC_VERSION >= 0x7530 && GCC_VERSION < 0x9c40\n
+#\t\tdefine COMPILER GCC3\n
+#\telif GCC_VERSION >= 0x9c40 && GCC_VERSION < 0x9ca4\n
+#\t\tdefine COMPILER GCC4_0\n
+#\telif GCC_VERSION >= 0x9ca5 && GCC_VERSION < 0x9d08\n
+#\t\tdefine COMPILER GCC4_1\n
+#\telse\n
+#\t\tdefine COMPILER UNKNOWN\n
+#\tendif\n
+\n
+#\tif __sparc || __sparcv9\n
+#\t\tdefine ARCH SPARC\n
+#\telif __x86_64\n
+#\t\tdefine ARCH X86_64\n
+#\telif __i386\n
+#\t\tdefine ARCH I386\n
+#\tendif\n
+\n
+#elif __MACH || __MACH__ || MACH\n
+#\tifndef __clang__\n
+#\t\tif GCC_VERSION == 0x765c\n
+#\t\t\tdefine COMPILER GCC3\n
+#\t\telif GCC_VERSION == 0x9c41\n
+#\t\t\tdefine COMPILER GCC4_0\n
+#\t\telif GCC_VERSION == 0x9d09\n
+#\t\t\tdefine COMPILER GCC4_2\n
+#\t\telse\n
+#\t\t\tdefine COMPILER UNKNOWN\n
+#\t\tendif\n
+#\telse\n
+#\t\tif __clang_major__ == 2\n
+#\t\t\tdefine COMPILER CLANG2\n
+#\t\telif __clang_major__ == 3\n
+#\t\t\tdefine COMPILER CLANG3\n
+#\t\telif __clang_major__ == 4\n
+#\t\t\tdefine COMPILER CLANG4\n
+#\t\telif __clang_major__ == 5\n
+#\t\t\tdefine COMPILER CLANG5\n
+#\t\telse\n
+#\t\t\tdefine COMPILER UNKNOWN\n
+#\t\tendif\n
+#\tendif\n
+\n
+#\tif __x86_64\n
+#\t\tdefine ARCH X86_64\n
+#\telif __i386\n
+#\t\tdefine ARCH I386\n
+#\telif __ppc64 || __ppc64__ || ppc64\n
+#\t\tdefine ARCH PPC64\n
+#\telif __ppc || __ppc__ || ppc\n
+#\t\tdefine ARCH PPC\n
+#\tendif\n
+\n
+#elif __linux || __linux__ || linux\n
+#\tif GCC_VERSION >= 0x7530 && GCC_VERSION < 0x9c40\n
+#\t\tdefine COMPILER GCC3\n
+#\telif GCC_VERSION >= 0x9c40 && GCC_VERSION < 0x9ca4\n
+#\t\tdefine COMPILER GCC4_0\n
+#\telif GCC_VERSION >= 0x9ca5 && GCC_VERSION < 0x9d08\n
+#\t\tdefine COMPILER GCC4_1\n
+#\telif GCC_VERSION >= 0x9d08 && GCC_VERSION < 0x9d6c\n
+#\t\tdefine COMPILER GCC4_2\n
+#\telse\n
+#\t\tdefine COMPILER UNKNOWN\n
+#\tendif\n
+\n
+#\tif __x86_64\n
+#\t\tdefine ARCH X86_64\n
+#\telif __i386\n
+#\t\tdefine ARCH I386\n
+#\telse\n
+#\t\tdefine ARCH UNKNOWN\n
+#\tendif\n
+#endif\n
+\n
+\n
+int main(int argc, char **argv)\n
+{\n
+\tif(argc == 1){\n
+\t\tstd::cout << ARCH << \" \" << COMPILER << std::endl;\n
+\t\treturn 0;\n
+\t}\n
+\n
+\tstd::string arg1 = *(argv + 1);\n
+\tif(arg1 == \"-a\" || arg1 == \"--arch\")\n
+\t\tstd::cout << ARCH;\n
+\telse if(arg1 == \"-c\" || arg1 == \"--compiler\")\n
+\t\tstd::cout << COMPILER;\n
+\n
+\treturn 0;\n
+}\n
+\n
+"
+
+# clean_test_program
+# The function removes the test program binary and the
+# test program source file(s)
+clean_test_program()
+{
+if [ -f ${test_program_name} -o -f ${test_program_source} ] ; then
+	rm -rf ${test_program_name} ${test_program_source}
+fi
+}
+
+
+# build_test_program
+# The function generates the C++ source file for the test program
+# and compiles the program with the given compiler and compiler flags
+#
+# Arguments:
+#	$1 - The C++ compiler
+#	$x - Where x includes the remaining arguments passed to the function
+#	     These arguments should be interpreted as compiler flags
+#
+# Returns: the compiler exit code from compiling the test program
+build_test_program()
+{
+compiler=$1
+count=`expr $# - 1`
+shift
+while [ ${count} -ne 0 ]
+do
+	args="$args $1"
+	count=`expr ${count} - 1`
+	shift
+done
+
+clean_test_program
+
+platform=`uname`
+
+if [ "${platform}" = "Darwin" ] ; then
+	osxversion=`sw_vers | grep ProductVersion | sed -e 's/[^0-9.]//g' | sed -e 's/\.[0-9]*$//'`
+	if [ "${osxversion}" = "10.3" -o "${osxversion}" = "10.4" ] ; then
+		echo ${test_program} | sed -e 's/\\n/\
+/g' | sed -e 's/\\t/	/g' | sed -e 's/^ //g' | sed -e 's/\\\*/\*/g' > ${test_program_source}
+	else
+		echo ${test_program} | sed -e 's/^ //g' | sed -e 's/\\\*/\*/g' > ${test_program_source}
+	fi
+elif [ "${platform}" = "Linux" ] ; then
+	echo ${test_program} | sed -e 's/\\n/\n/g' | sed -e 's/\\t/\t/g' | sed -e 's/\\\\$/\\/g' | sed -e 's/^ //g' | sed -e 's/\\\*/\*/g' > ${test_program_source}
+elif [ "${platform}" = "SunOS" ] ; then
+	echo ${test_program} | sed -e 's/\\n/\
+/g' | sed -e 's/\\t/	/g' | sed -e 's/\\\\/\\/g' | sed -e 's/^ //g' | sed -e 's/\\\*/\*/g' > ${test_program_source}	
+fi
+
+${compiler} ${args} -o ${test_program_name} ${test_program_source} > /dev/null 2>&1
+echo $?
+}
+
+
+# get_architecture
+# The function builds the test program and queries the test program
+# for the current platform's architecture string
+#
+# Arguments:
+#        $1 - the C++ compiler
+#
+# Returns: the architecture id string for the current platform
+get_architecture()
+{
+compiler=$1
+result=`build_test_program ${compiler}`
+if [ ${result} -eq 0 ] ; then
+	echo `${test_program_name} -a`
+fi
+clean_test_program
+}
+
+
+# get_compiler
+# The function builds the test program and queries the test program
+# for the current platform's compiler string
+#
+# Arguments:
+#        $1 - the C++ compiler
+#
+# Returns: the compiler id string for the current platform
+get_compiler()
+{
+compiler=$1
+result=`build_test_program ${compiler}`
+if [ ${result} -eq 0 ] ; then
+	echo `${test_program_name} -c`
+fi
+clean_test_program
+}
+
+
+# test_darwin_architecture
+# The function compiles the test program with the specified OSX architecture
+# value in order to determine if the current OSX machine supports the 
+# requested architecture
+#
+# Arguments:
+#        $1 - the C++ compiler
+#        $2 - the -arch value (eg ppc, ppc64, i386, x86_64)
+#
+# Returns: the compiler flag string of "-arch x" where x is the requested
+#          architecture value
+test_darwin_architecture()
+{
+compiler=$1
+arch="-arch $2"
+result=`build_test_program ${compiler} ${arch}`
+if [ ${result} -eq 0 ] ; then
+	echo ${arch}
+fi
+clean_test_program
+}
+
+
+# test_gcc_bit_size
+# The function builds the test program with the specified 32 or 64
+# architecture setting (-m32, -m64).  This function should be used
+# on non-OSX machines
+#
+# Arguments:
+#        $1 - the C++ compiler
+#        $2 - 32 or 64 (as a string)
+#
+# Returns: the compiler flag -m32 or -m64 useable on non-OSX machines
+test_gcc_bit_size()
+{
+compiler=$1
+bitsize="-m$2"
+result=`build_test_program ${compiler} ${bitsize}`
+if [ ${result} -eq 0 ] ; then
+	echo ${bitsize}
+fi
+clean_test_program
+}
+
+
+# get_compilation_flags
+# The function uses the test program and stored compiler settings to 
+# determine the proper compilation flags
+#
+# Arguments:
+#        $1 - 32, 64, or 32/64 (as strings)
+#        $2 - platform id (result of `uname`)
+#        $3 - architecture id (generated by the test program)
+#        $4 - compiler id (generated by the test program)
+#        $5 - the C++ compiler
+#        $6 - yes or no indicating whether to try all possible OSX architectures
+#             or just use the default architecture of the currently running system
+#
+# Returns: a string containing the proper compiler flags for the identified compiler
+get_compilation_flags()
+{
+bitsize=$1
+platform=$2
+arch=$3
+compiler_version=$4
+compiler=$5
+native_only=$6
+
+if [ "${platform}" = "Darwin" ] ; then
+	if [ "${native_only}" = "no" ] ; then
+		if [ ${bitsize} = ${bit32} ] ; then
+			supported_architectures=`test_darwin_architecture ${compiler} ${ppc}`
+			supported_architectures="${supported_architectures} `test_darwin_architecture ${compiler} ${i386}`"
+		elif [ ${bitsize} = ${bit64} ] ; then
+			supported_architectures=`test_darwin_architecture ${compiler} ${ppc64}`
+			supported_architectures="${supported_architectures} `test_darwin_architecture ${compiler} ${x86_64}`"
+		elif [ ${bitsize} = ${bit3264} ] ; then
+			supported_architectures=`test_darwin_architecture ${compiler} ${ppc}`
+			supported_architectures="${supported_architectures} `test_darwin_architecture ${compiler} ${ppc64}`"
+			supported_architectures="${supported_architectures} `test_darwin_architecture ${compiler} ${i386}`"
+			supported_architectures="${supported_architectures} `test_darwin_architecture ${compiler} ${x86_64}`"
+		fi
+	fi
+
+	if [ ${compiler_version} = ${gcc3} ] ; then
+		echo "${supported_architectures} -pipe -Wno-long-double"
+	elif [ ${compiler_version} = ${gcc4_0} ] ; then
+		echo "${supported_architectures} -Wno-long-double"
+	elif [ ${compiler_version} = ${clang5} ] ; then
+		echo "${supported_architectures} -stdlib=libstdc++"
+	else
+		echo ${supported_architectures}
+	fi
+elif [ "${platform}" = "Linux" ] ; then
+	if [ ${bitsize} = ${bit32} ] ; then
+		supported_bitsizes=`test_gcc_bit_size ${compiler} ${bit32}`
+	elif [ ${bitsize} = ${bit64} ] ; then
+		supported_bitsizes="`test_gcc_bit_size ${compiler} ${bit64}`"
+	fi
+	if [ ! -z "${supported_bitsizes}" ] ; then
+		echo ${supported_bitsizes}
+	fi
+elif [ "${platform}" = "SunOS" ] ; then
+	gobal_sun_flags="-Xa -KPIC"
+	if [ ${bitsize} = ${bit32} ] ; then
+		echo "`${arch}`"
+		if [ "${arch}" = "${sparc}" ] ; then
+			if [ "${compiler_version}" = "workshop" -o "${compiler_version}" = "studio8" -o "${compiler_version}" = "studio10" -o "${compiler_version}" = "studio11" -o "${compiler_version}" = "studio12" ] ; then
+				echo "${global_sun_flags} -xtarget=ultra"
+			# todo: Add support for gcc
+			# elif [ ${compiler_version} = "gcc3" -o ${compiler_version} = "gcc4_0" -o ${compiler_version} = "gcc4_1" -o ${compiler_version} = "gcc4_2"] ; then
+			# 	;
+			fi
+		else
+			if [ ${compiler_version} = "workshop" -o ${compiler_version} = "studio8" -o ${compiler_version} = "studio10" -o ${compiler_version} = "studio11" -o ${compiler_version} = "studio12" ] ; then
+				echo "${global_sun_flags} -xtarget=opteron -xarch=generic"
+			# todo: Add support for gcc
+			# elif [ ${compiler_version} = "gcc3" -o ${compiler_version} = "gcc4_0" -o ${compiler_version} = "gcc4_1" -o ${compiler_version} = "gcc4_2"] ; then
+			# 	;
+			fi
+		fi
+	elif [ ${bitsize} = ${bit64} ] ; then
+		if [ "${arch}" = "${sparc}" ] ; then
+			if [ "${compiler_version}" = "workshop" -o "${compiler_version}" = "studio8" -o "${compiler_version}" = "studio10" -o "${compiler_version}" = "studio11" ] ; then
+				echo "${global_sun_flags} -xtarget=ultra -xarch=v9"
+			elif [  "${compiler_version}" = "studio12" ] ; then
+				echo "${global_sun_flags} -xtarget=ultra -m64"
+			# todo: Add support for gcc
+			# elif [ ${compiler_version} = "gcc3" -o ${compiler_version} = "gcc4_0" -o ${compiler_version} = "gcc4_1" -o ${compiler_version} = "gcc4_2"] ; then
+			# 	;
+			fi
+		else
+			if [ "${compiler_version}" = "workshop" -o "${compiler_version}" = "studio8" -o "${compiler_version}" = "studio10" -o "${compiler_version}" = "studio11" ] ; then
+				echo "${global_sun_flags} -xtarget=opteron -xarch=amd64"
+			elif [ "${compiler_version}" = "studio12" ] ; then
+				echo "${global_sun_flags} -xtarget=opteron -m64 -xarch=generic"
+			# todo: Add support for gcc
+			# elif [ ${compiler_version} = "gcc3" -o ${compiler_version} = "gcc4_0" -o ${compiler_version} = "gcc4_1" -o ${compiler_version} = "gcc4_2"] ; then
+			# 	;
+			fi
+		fi
+	fi
+elif [ "${platform}" = "CYGWIN" ] ; then
+	if [ ${bitsize} = ${bit32} ] ; then
+		supported_bitsizes=`test_gcc_bit_size ${compiler} ${bit32}`
+	elif [ ${bitsize} = ${bit64} ] ; then
+		supported_bitsizes=`test_gcc_bit_size ${compiler} ${bit64}`
+	fi
+	echo ${supported_bitsizes}
+fi
+}
+
+
+# get_linker_libraries
+# The function determines the correct system libraries for use in
+# linking the MathLink binary
+#
+# Arguments:
+#        $1 - platform id (result of `uname`)
+#        $2 - yes or no indicating whether to use the .a or the .so library
+#             (currently not valid on OSX)
+#        $3 - MathLink interface number
+#        $4 - 32 or 64 (as strings)
+#        $5 - path to MathLink Developer Kit CompilerAdditions directory
+#
+# Returns: a string containing the libraries to link into the MathLink program
+get_linker_libraries()
+{
+
+platform=$1
+static=$2
+interface=$3
+bittype=$4
+mldkpath=$5
+
+if [ "${platform}" = "Darwin" ] ; then
+	libs="-lstdc++"
+	if [ "${static}" = "yes" ] ; then
+		libs="${libs} ${mldkpath}/libMLi${interface}.a"        
+	else
+		libs="${libs} -F ${mldkpath} -framework mathlink"
+	fi
+	libs="${libs} -framework Foundation"
+elif [ "${platform}" = "Linux" ] ; then
+	libs="-lm -lpthread -lrt -ldl -lstdc++ -luuid"
+	if [ ${bittype} = ${bit32} ] ; then
+		libname="${mldkpath}/libML32i${interface}"
+	elif [ ${bittype} = ${bit64} ] ; then
+		libname="${mldkpath}/libML64i${interface}"
+	fi
+
+	if [ "${static}" = "yes" ] ; then
+		libs="${libs} ${libname}.a"
+	else
+		libs="${libs} ${libname}.so"
+	fi
+elif [ "${platform}" = "SunOS" ] ; then
+	echo "-lm -lsocket -lnsl -lrt"
+	if [ ${bittype} = ${bit32} ] ; then
+		libname="${mldkpath}/libML32i${interface}"
+	elif [ ${bittype} = ${bit64} ] ; then
+		libname="${mldkpath}/libML64i${interface}"
+	fi
+
+	if [ "${static}" = "yes" ] ; then
+		libs="${libs} ${libname}.a"
+	else
+		libs="${libs} ${libname}.so"
+	fi
+elif [ "${platform}" = "CYGWIN" ] ; then
+	libs="-lstdc++ ${mldkpath}/../lib/libML32i${interface}.a -lGdi32"
+fi
+
+echo ${libs}
+}
+
+
+# messages with spaces need to be stored with _ instead of the spaces
+# for generate_ok_message_awk_script() to correctly put the whole string
+# into the awk script.
+mcc_ok_compiler_messages="
+-xarch=native_has_been_explicitly_specified
+"
+
+# generate_ok_messages_awk_script
+# The function creates an script suitable for parsing compiler output.
+# The goal is to swallow harmless compiler warnings from compilers such as
+# the Sun Studio compiler that generates things like:
+# 
+# cc: Warning: -xarch=native has been explicitly specified, or implicitly 
+# specified by a macro option, -xarch=native on this architecture implies 
+# -xarch=sparcvis which generates code that does not run on pre UltraSPARC 
+# processors
+#
+# The warning is perfectly harmless, but there is no good way to disable
+# the warning without generating other equally harmless warnings.  Instead
+# we just swallow the warnings and only spit back warnings/errors that do
+# not match the list in ${mcc_ok_compiler_messages}
+#
+# Arguments
+#        $1 - the file name that will hold the awk script
+generate_ok_messages_awk_script()
+{
+filename=$1
+touch ${filename}
+for message in ${mcc_ok_compiler_messages}
+do
+	echo "! /${message}/ { print }" | sed -e 's/_/ /g' >> ${filename}
+done
+}
+
+
+# compile_files
+# The function process the list of input files and compiles them to object files.
+# The function can compile either C or C++ source files.
+#
+# Arguments:
+#        $1 - the compiler
+#        $2 - the compiler arguments
+#        $3 - the source files
+#        $4 - the file extension to use for the output file.  This argument is used
+#             to support the -P command line flag for mcc that outputs the preprocesses
+#             source files to files ending in the .i extension
+#        $5 - the awk script filename
+#        $6 - yes or no indicating whether to be verbose and report actions.
+#        $7 - The compiler output log filename
+#
+# Returns: a list of the compiled object file names
+compile_files()
+{
+compiler=$1
+args=$2
+files=$3
+fileextension=$4
+verbose=$5
+compile_log=$6
+tmp_log="/tmp/mcc_tmp_$$.log"
+
+for file in ${files}
+do
+	fileroot=`echo ${file} | sed -e 's/\(.*\)\..*/\1/'`
+	fileoutputname=${fileroot}${fileextension}
+
+	${compiler} ${args} -o ${fileoutputname} ${file} >> ${tmp_log} 2>&1
+	
+	if [ "${verbose}" = "yes" ] ; then
+		echo "${compiler} ${args} -o ${fileoutputname} ${file}" >> ${compile_log}
+		cat ${tmp_log} >> ${compile_log}
+	else
+		if [ -s ${tmp_log} ] ; then
+			echo "${file}: `cat ${tmp_log}`" >> ${compile_log}
+		fi
+	fi
+
+	rm -rf ${tmp_log}
+
+	if [ -f ${fileoutputname} ] ; then
+		object_files="${object_files} ${fileoutputname}"
+	fi
+done
+echo ${object_files}
+}
+
+
+# handle_compiler_log
+# The function handles the display of the compiler log file
+#
+# Arguments:
+#        $1 - the compiler log file name.
+#        $2 - the awk file name
+handle_compiler_log()
+{
+logfile=$1
+awkfile=$2
+if [ -s ${logfile} ] ; then
+	cat ${logfile} | awk -f ${awkfile}
+	rm -rf ${logfile}
+fi
+}
+
+
+# mcc_usage
+# The function generates a usage message for mcc
+mcc_usage()
+{
+  cat <<EOF
+${mcc_name}
+Usage: $0 [options]
+Options:
+  --help     print this message
+  --version  only print version information
+  -g         keep the C file generated by mprep and pass the -g option
+             to the C/C++ compilers to generate a symbol table for debugging
+  -E         pass the .tm files through mprep, then run the C source files
+             through the C compiler only, then run the C++ files through the 
+             C++ compiler only, sending the output to stdout
+  -P         pass the .tm files through mprep, then run the C source files
+             through the C compiler only, then run the C++ files through the
+             C++ compiler only, writing the output to files with .i suffixes
+  -xo name   write the output in name/$1/name, to be located by
+             Install["name"]
+  -n         generate native only binaries, the -n flag will supercede other 
+             architecture flags. [An OS X option only.  Currently available 
+             OS X compilers generate ppc and i386 architectures as the default
+             native architectures even if the system supports the ppc64 and/or 
+             x86_64 architecture]         
+  -st        only link with the static library 
+  -b32       generate a 32-bit binary
+  -b64       generate a 64-bit binary
+  -b32_64    generate a binary with both 32 and 64-bit architectures on 
+             Mac OS X
+EOF
+
+  if [ "$1" = "MacOSX-x86-64" ] ; then
+	cat <<EOF
+
+  Mac OS X special considerations:
+
+  $0 on Mac OS X by default will attempt to build Universal binaries.
+  Currently, the template compiler can create MathLink programs for the ppc,
+  ppc64, i386, and x86_64 CPU architectures.  The template compiler checks 
+  the currently running system to see which architectures the compiler can 
+  support and automatically builds that set of architectures into the 
+  MathLink program. 
+
+EOF
+  fi
+
+
+  exit 10
+
+}
+
+
+# mcc_no_argument_message
+# The function generates a simple help message for mcc when mcc is called without arguments
+mcc_no_argument_message()
+{
+  cat <<EOF
+${mcc_name}
+Usage: Use --help argument for more information.
+EOF
+}
+
+# Check to see if we have actual arguments
+if [ $# -eq 0 ] ; then
+	mcc_no_argument_message
+	exit 0
+fi
+
+# Detect the current system and set initial values
+
+mcc_platform=`uname`
+
+mcc_cygwin_check=`expr "${mcc_platform}" : '\(CYGWIN\)'`
+if [ "${mcc_cygwin_check}" = "CYGWIN" ] ; then
+	mcc_platform=CYGWIN
+fi
+
+mcc_version=7.0.1
+mcc_systemid=Linux-ARM
+mcc_mathlink_interface=4
+mcc_mldk_dir=`find_mldk_dir $0`
+mcc_c_compiler=`find_compilers ${mcc_platform} "C"`
+if [ "${mcc_c_compiler}" = "" ] ; then
+	echo "$0: cannot find C compiler, $0 requires a C compiler"
+	exit 11
+fi
+
+mcc_cxx_compiler=`find_compilers ${mcc_platform} "C++"`
+if [ "${mcc_cxx_compiler}" = "" ] ; then
+	echo "$0: cannot find C++ compiler, $0 requires a C++ compiler"
+	exit 11
+fi
+
+mcc_architecture=`get_architecture ${mcc_cxx_compiler}`
+mcc_compiler=`get_compiler ${mcc_cxx_compiler}`
+mcc_awk_message_file="/tmp/mccawkmessage_$$.awk"
+mcc_compiler_log="/tmp/mcc_compiler_output_$$.log"
+
+# Set the default values for command-line oriented variables
+mcc_preprocess_to_stdout="no"
+mcc_preprocess_to_i="no"
+mcc_compile_only="no"
+mcc_output_filename="a.out"
+mcc_native_only="no"
+mcc_debug_compile="no"
+mcc_generate_32bit_binary="no"
+mcc_generate_64bit_binary="no"
+mcc_generate_3264bit_binary="no"
+mcc_object_file_extension=".o"
+mcc_use_the_static_library="no"
+mcc_print_variable_values="no"
+
+# Parse the command line options
+count=$#
+while [ $count -ne 0 ]
+do
+	case "$1" in
+		--help|-h)
+			mcc_usage ${mcc_systemid}
+			exit 0
+			;;
+		--version|-v)
+			echo ${mcc_version}
+			exit 0
+			;;
+		--verbose)
+			mcc_verbose="yes"
+			;;
+		-b32)
+			mcc_generate_32bit_binary="yes"
+			if [ "${mcc_generate_64bit_binary}" = "yes" -a "${mcc_platform}" = "Darwin" ] ; then
+				mcc_generate_3264bit_binary="yes"
+				mcc_generate_32bit_binary="no"
+				mcc_generate_64bit_binary="no"
+			elif [ "${mcc_generate_64bit_binary}" = "yes" -a ! "${mcc_platform}" = "Darwin" ] ; then
+				echo "$0: -b32 and -b64 are mutually exclusive on this platform"
+				exit 12
+			fi
+			;;
+		-b64)
+			mcc_generate_64bit_binary="yes"
+			if [ "${mcc_generate_32bit_binary}" = "yes" -a "${mcc_platform}" = "Darwin" ] ; then
+				mcc_generate_3264bit_binary="yes"
+				mcc_generate_32bit_binary="no"
+				mcc_generate_64bit_binary="no"
+			elif [ "${mcc_generate_32bit_binary}" = "yes" -a ! "${mcc_platform}" = "Darwin" ] ; then
+				echo "$0: -b64 and -b32 are mutually exclusive on this platform"
+				exit 12
+			fi
+			;;
+		-b32_64)
+			mcc_generate_3264bit_binary="yes"
+			if [ "${mcc_platform}" != "Darwin" ] ; then
+				echo "$0: Multiple architecture binaries not supported on this platform"
+				exit 12
+			fi
+			;;
+		-E)
+			mcc_preprocess_to_stdout="yes"
+			if [ "${mcc_preprocess_to_i}" = "yes" ] ; then
+				echo "$0: -E and -P arguments are mutually exclusive"
+				exit 12
+			fi
+			mcc_extra_compile_flags="${mcc_extra_compile_flags} $1"
+			mcc_native_only="yes"
+			;;
+		-P)
+			mcc_preprocess_to_i="yes"
+			if [ "${mcc_preprocess_to_stdout}" = "yes" ] ; then
+				echo "$0: -P and -E arguments are mutually exclusive"
+				exit 12
+			fi
+			mcc_extra_compile_flags="${mcc_extra_compile_flags} -E"
+			mcc_native_only="yes"
+			mcc_object_file_extension=".i"
+			;;
+		-c)
+			mcc_compile_only="yes"
+			;;
+		-o)
+			if [ -z "$2" ] ; then
+				echo "$0: -o option, but no file name"
+				exit 12
+			fi
+			mcc_output_filename=$2
+			count=`expr $count - 1`
+			shift
+			;;
+		-xo)
+			if [ -z "$2" ] ; then
+				echo "$0: -xo option, but no file name"
+				exit 12
+			fi
+			
+			if [ -f $2 -o -d $2 ] ; then
+				echo "$0: aborting, $2 already exists"
+				exit 12
+			fi
+
+			if [ -d $2 ] ; then
+				rm -rf $2
+			fi
+			mkdir -p $2/${mcc_systemid}
+			mcc_output_filename=$2/${mcc_systemid}/$2
+			count=`expr $count - 1`
+			shift
+			;;
+		-g)
+			mcc_debug_compile="yes"
+			mcc_extra_compile_flags="${mcc_extra_compile_flags} $1"
+			;;
+		-n)
+			mcc_native_only="yes"
+			;;
+		-st)
+			mcc_use_the_static_library="yes"
+			;;
+		--internals)
+			mcc_print_variable_values="yes"
+			;;
+		*.tm)
+			mcc_tm_files="${mcc_tm_files} $1"
+			;;
+		*.c)
+			mcc_c_files="${mcc_c_files} $1"
+			;;
+		*.cc|*.CC|*.cpp|*.cxx)
+			mcc_cxx_files="${mcc_cxx_files} $1"
+			;;
+		*)
+			mcc_extra_compile_flags="${mcc_extra_compile_flags} $1"
+			;;
+	esac
+	
+	count=`expr $count - 1`
+	shift
+done
+
+
+# Determine compilation flags
+
+if [ "${mcc_platform}" = "CYGWIN" ] ; then
+	mcc_extra_include_path='/../include'
+fi
+
+mcc_32bit_compiler_flags=`get_compilation_flags ${bit32} ${mcc_platform} ${mcc_architecture} ${mcc_compiler} ${mcc_cxx_compiler} ${mcc_native_only}`
+mcc_64bit_compiler_flags=`get_compilation_flags ${bit64} ${mcc_platform} ${mcc_architecture} ${mcc_compiler} ${mcc_cxx_compiler} ${mcc_native_only}`
+
+mcc_include_path="-I${mcc_mldk_dir}${mcc_extra_include_path}"
+mcc_compile_flags32="${mcc_include_path} ${mcc_32bit_compiler_flags}"
+mcc_compile_flags64="${mcc_include_path} ${mcc_64bit_compiler_flags}"
+mcc_compile_flags32_64="${mcc_include_path} ${mcc_32bit_compiler_flags} ${mcc_64bit_compiler_flags}"
+
+
+# Determine if this platform can make the 32 or 64-bit binaries
+if [ "${mcc_generate_32bit_binary}" = "yes" -a -z "${mcc_32bit_compiler_flags}" ] ; then
+	echo "$0: Unable to generate 32-bit binaries on this platform"
+	exit 13
+elif [ "${mcc_generate_64bit_binary}" = "yes" -a -z "${mcc_64bit_compiler_flags}" ] ; then
+	echo "$0: Unable to generate 64-bit binaries on this platform"
+	exit 13
+elif [ "${mcc_generate_3264bit_binary}" = "yes" ] ; then
+	if [ -z "${mcc_32bit_compiler_flags}" -o -z "${mcc_64bit_compiler_flags}" ] ; then
+		echo "$0: Unable to generate 32 and 64-bit architectures on this platform"
+		exit 13
+	fi
+fi
+
+
+# Pick the correct compiler flags for 32 or 64 bit compiles
+if [ "${mcc_generate_32bit_binary}" = "yes" ] ; then
+	mcc_compile_flags=${mcc_compile_flags32}
+	mcc_library_bit_type=${bit32}
+elif [ "${mcc_generate_64bit_binary}" = "yes" ] ; then
+	mcc_compile_flags=${mcc_compile_flags64}
+	mcc_library_bit_type=${bit64}
+elif [ "${mcc_generate_3264bit_binary}" = "yes" ] ; then
+	mcc_compile_flags=${mcc_compile_flags32_64}
+	mcc_library_bit_type=${bit64} # This value does not matter in this case (Darwin only)	
+else
+	if [ "${mcc_platform}" = "Darwin" ] ; then
+		mcc_compile_flags=${mcc_compile_flags32_64}
+		mcc_library_bit_type=${bit64}
+	else
+		if [ -z "${mcc_64bit_compiler_flags}" ] ; then
+			mcc_compile_flags=${mcc_compile_flags32}
+			mcc_library_bit_type=${bit32}
+		else
+			mcc_compile_flags=${mcc_compile_flags64}
+			mcc_library_bit_type=${bit64}
+		fi
+	fi
+fi
+
+# Finalize the compiler flags and get the linker libraries
+mcc_compile_flags="${mcc_compile_flags} ${mcc_extra_compile_flags}"
+mcc_linker_libs=`get_linker_libraries ${mcc_platform} ${mcc_use_the_static_library} ${mcc_mathlink_interface} ${mcc_library_bit_type} ${mcc_mldk_dir}`
+
+if [ "${mcc_print_variable_values}" = "yes" ] ; then
+	echo "Version: ${mcc_version}"
+	echo "SystemID: ${mcc_systemid}"
+	echo "MathLink Interface: ${mcc_mathlink_interface}"
+	echo "MLDK Directory: ${mcc_mldk_dir}"
+	echo "C Compiler: ${mcc_c_compiler}"
+	echo "C++ Compiler: ${mcc_cxx_compiler}"
+	echo "Machine Architecture: ${mcc_architecture}"
+	echo "CompilerID: ${mcc_compiler}"
+	echo "Awk Message File Name: ${mcc_awk_message_file}"
+	echo "Compiler Log File Name: ${mcc_compiler_log}"
+
+	echo "Mprep Arguments: ${mcc_mprep_arguments}"
+	echo "Preprocess to stdout: ${mcc_preprocess_to_stdout}"
+	echo "Preprocess to i: ${mcc_preprocess_to_i}"
+	echo "Compile Only: ${mcc_compile_only}"
+	echo "Output Filename: ${mcc_output_filename}"
+	echo "Native Only: ${mcc_native_only}"
+	echo "Debug Compile: ${mcc_debug_compile}"
+	echo "Generate 32-bit Binary: ${mcc_generate_32bit_binary}"
+	echo "Generate 64-bit Binary: ${mcc_generate_64bit_binary}"
+	echo "Generate 32/64-bit Binary: ${mcc_generate_3264bit_binary}"
+	echo "Object File Extension: ${mcc_object_file_extension}"
+	echo "Use Static Library: ${mcc_use_the_static_library}"
+
+	echo "32-bit Compiler Flags: ${mcc_32bit_compiler_flags}"
+	echo "64-bit Compiler Flags: ${mcc_64bit_compiler_flags}"
+	echo "Compile Flags 32: ${mcc_compile_flags32}"
+	echo "Compile Flags 64: ${mcc_compile_flags64}"
+	echo "Compile Flags 32/64: ${mcc_compile_flags32_64}"
+
+	echo "Compile Flags: ${mcc_compile_flags}"
+	echo "Library Bit Type: ${mcc_library_bit_type}"
+	echo "Linker Libraries: ${mcc_linker_libs}"
+
+	exit 0
+fi
+
+# Convert the .tm files to .c files using mprep
+if [ ! -z "${mcc_tm_files}" ] ; then
+	mcc_tm_c_file=${mcc_output_filename}.tm.c
+	if [ "${mcc_verbose}" = "yes" ] ; then
+		echo "${mcc_mldk_dir}/mprep ${mcc_mprep_arguments} ${mcc_tm_files} -o ${mcc_tm_c_file}"
+	fi
+	${mcc_mldk_dir}/mprep ${mcc_mprep_arguments} ${mcc_tm_files} -o ${mcc_tm_c_file}
+	mcc_c_files="${mcc_c_files} ${mcc_tm_c_file}"
+fi
+
+
+# Generate the awk file for compiler message handling
+generate_ok_messages_awk_script ${mcc_awk_message_file}
+
+# Check to see if the script should generate preprocessed output sent to stdout
+if [ "${mcc_preprocess_to_stdout}" = "yes" ] ; then
+	mcc_c_preprocessed_files=`compile_files ${mcc_c_compiler} "${mcc_compile_flags} -E" "${mcc_c_files}" ${mcc_object_file_extension} ${mcc_verbose} ${mcc_compiler_log}`
+	handle_compiler_log ${mcc_compiler_log} ${mcc_awk_message_file}
+
+	mcc_cxx_preprocessed_files=`compile_files ${mcc_cxx_compiler} "${mcc_compile_flags} -E" "${mcc_cxx_files}" ${mcc_object_file_extension} ${mcc_verbose} ${mcc_compiler_log}`
+	handle_compiler_log ${mcc_compiler_log} ${mcc_awk_message_file}
+
+	for file in ${mcc_c_preprocessed_files}
+	do
+		cat ${file}
+	done
+
+	for file in ${mcc_cxx_preprocessed_files}
+	do
+		cat ${file}
+	done
+
+	# Clean up the leftover files if necessary
+	if [ "${mcc_debug_compile}" = "no" ] ; then
+		rm -rf ${mcc_c_preprocessed_files}
+		rm -rf ${mcc_cxx_preprocessed_files}
+	fi
+	if [ "${mcc_debug_compile}" = "no" ] ; then
+		if [ ! -z "${mcc_tm_c_file}" ] ; then
+			rm -rf ${mcc_tm_c_file}
+		fi
+	fi
+	exit 0
+fi
+
+
+# Check to see if the script should generate preprocessed output and store them in files with the .i extension
+if [ "${mcc_preprocess_to_i}" = "yes" ] ; then
+	mcc_c_preprocessed_files=`compile_files ${mcc_c_compiler} "${mcc_compile_flags} -E" "${mcc_c_files}" ${mcc_object_file_extension} ${mcc_verbose} ${mcc_compiler_log}`
+	handle_compiler_log ${mcc_compiler_log} ${mcc_awk_message_file}
+
+	mcc_cxx_preprocessed_files=`compile_files ${mcc_cxx_compiler} "${mcc_compile_flags} -E" "${mcc_cxx_files}" ${mcc_object_file_extension} ${mcc_verbose} ${mcc_compiler_log}`
+	handle_compiler_log ${mcc_compiler_log} ${mcc_awk_message_file}
+
+	# Clean up the leftover files if necessary
+	if [ "${mcc_debug_compile}" = "no" ] ; then
+		if [ ! -z "${mcc_tm_c_file}" ] ; then
+			rm -rf ${mcc_tm_c_file}
+		fi
+	fi
+	exit 0
+fi
+
+
+# Compile the C files
+mcc_c_object_files=`compile_files ${mcc_c_compiler} "${mcc_compile_flags} -c" "${mcc_c_files}" ${mcc_object_file_extension} ${mcc_verbose} ${mcc_compiler_log}`
+handle_compiler_log ${mcc_compiler_log} ${mcc_awk_message_file}
+
+# Compile the C++ files
+mcc_cxx_object_files=`compile_files ${mcc_cxx_compiler} "${mcc_compile_flags} -c" "${mcc_cxx_files}" ${mcc_object_file_extension} ${mcc_verbose} ${mcc_compiler_log}`
+handle_compiler_log ${mcc_compiler_log} ${mcc_awk_message_file}
+
+# Echo any output from the compile stages if verbose mode is active
+if [ "${mcc_verbose}" = "yes" -a -f ${mcc_verbose_log} ] ; then
+	cat ${mcc_verbose_log} | awk -f ${mcc_awk_message_file}
+	rm ${mcc_verbose_log}
+fi
+
+
+mcc_mldk_link_dir_flag="-L${mcc_mldk_dir}"
+
+# Link the object files using the C++ compiler
+if [ "${mcc_verbose}" = "yes" ] ; then
+	echo "${mcc_cxx_compiler} ${mcc_compile_flags} -o ${mcc_output_filename} ${mcc_c_object_files} ${mcc_cxx_object_files} ${mcc_mldk_link_dir_flag} ${mcc_linker_libs}"
+fi
+${mcc_cxx_compiler} ${mcc_compile_flags} -o ${mcc_output_filename} ${mcc_c_object_files} ${mcc_cxx_object_files} ${mcc_mldk_link_dir_flag} ${mcc_linker_libs} 2>&1 | awk -f ${mcc_awk_message_file}
+
+# Remove the awk script
+rm -rf ${mcc_awk_message_file}
+
+# Clean up leftover files if necessary
+if [ "${mcc_debug_compile}" = "no" ] ; then
+	if [ ! -z "${mcc_tm_c_file}" ] ; then
+		rm -rf ${mcc_tm_c_file}
+	fi
+	
+	for file in ${mcc_c_object_files}
+	do
+		rm -rf ${file}
+	done
+	
+	for file in ${mcc_cxx_object_files}
+	do
+		rm -rf ${file}
+	done
+fi
+

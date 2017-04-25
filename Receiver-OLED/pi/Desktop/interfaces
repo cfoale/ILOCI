@@ -1,0 +1,24 @@
+auto lo
+iface lo inet loopback
+
+auto wlan0
+allow-hotplug wlan0
+
+iface wlan0 inet static
+#   wpa-ssid "AIBONET1"
+#   wpa-psk "xxx"
+    wireless-essid HANGARA2
+    wireless-mode managed 
+    address 192.168.1.231
+    netmask 255.255.255.0
+    gateway 192.168.1.1
+
+allow-hotplug eth0
+iface eth0 inet static
+    address 192.168.1.232
+    netmask 255.255.255.0
+    gateway 192.168.1.1
+
+dns-nameservers 192.168.1.1 8.8.4.4 8.8.8.8
+
+

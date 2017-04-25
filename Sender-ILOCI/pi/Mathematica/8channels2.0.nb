@@ -1,0 +1,800 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 10.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     32081,        791]
+NotebookOptionsPosition[     31154,        753]
+NotebookOutlinePosition[     31493,        768]
+CellTagsIndexPosition[     31450,        765]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[BoxData[
+ RowBox[{"(*", 
+  RowBox[{
+   RowBox[{"Modified", " ", "by", " ", "cmf", " ", 
+    RowBox[{
+     RowBox[{"5", "/", "31"}], "/", "16"}], "\n", "ILOCI", " ", "data", " ", 
+    "recording", " ", "at", " ", "2", "Hz", " ", "rate"}], ",", " ", 
+   RowBox[{"sample", " ", "interval", " ", "500", "ms"}]}], "*)"}]], "Input",
+ CellChangeTimes->{{3.6737195217744513`*^9, 3.6737195309762793`*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"DeviceWrite", "[", 
+   RowBox[{"\"\<GPIO\>\"", ",", 
+    RowBox[{"17", "->", "0"}]}], "]"}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{
+   RowBox[{
+   "Print", "[", "\"\<8channels.m ..Looking for switch for 30 seconds..\>\"", 
+    "]"}], ";"}], "\n", 
+  RowBox[{"(*", 
+   RowBox[{
+   "Pause", " ", "30", " ", "seconds", " ", "while", " ", "waiting", " ", 
+    "for", " ", "the", " ", "switch"}], "*)"}]}], "\n", 
+ RowBox[{
+  RowBox[{"Do", "[", "\n", "  ", 
+   RowBox[{
+    RowBox[{
+     RowBox[{"gpio18in", " ", "=", 
+      RowBox[{"22", "/.", 
+       RowBox[{"DeviceRead", "[", 
+        RowBox[{"\"\<GPIO\>\"", ",", "22"}], "]"}]}]}], ";", "\n", "  ", 
+     RowBox[{"If", "[", 
+      RowBox[{
+       RowBox[{"gpio18in", "==", "1"}], ",", "\n", "        ", 
+       RowBox[{
+        RowBox[{"DeviceWrite", "[", 
+         RowBox[{"\"\<GPIO\>\"", ",", 
+          RowBox[{"17", "->", "1"}]}], "]"}], ";", 
+        RowBox[{"Break", "[", "]"}]}]}], "]"}], ";", "\n", "  ", 
+     RowBox[{"Pause", "[", "1", "]"}], ";"}], ",", "\n", 
+    RowBox[{"{", 
+     RowBox[{"i", ",", "1", ",", "30"}], "}"}]}], "]"}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"If", "[", 
+    RowBox[{
+     RowBox[{"gpio18in", "==", "0"}], ",", 
+     RowBox[{
+      RowBox[{
+      "Print", "[", "\"\<5channels finishing..nothing done\>\"", "]"}], ";", 
+      RowBox[{"Exit", "[", "]"}]}]}], "]"}], ";"}], "\n"}], "\n", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"DeviceWrite", "[", 
+    RowBox[{"\"\<GPIO\>\"", ",", 
+     RowBox[{"17", "->", "1"}]}], "]"}], ";"}], "\n", 
+  RowBox[{"(*", 
+   RowBox[{
+   "LED", " ", "GPIO", " ", "24", " ", "should", " ", "be", " ", "lit"}], 
+   "*)"}]}], "\n", 
+ RowBox[{
+  RowBox[{"linkmcp3008", " ", "=", " ", 
+   RowBox[{
+   "Install", "[", 
+    "\"\</home/pi/projects/ML_spidev_mcp3008/ML_spidev_mcp3008\>\"", "]"}]}], 
+  ";"}], "\n", 
+ RowBox[{
+  RowBox[{"Print", "[", 
+   RowBox[{"\"\<The link is \>\"", ",", " ", "linkmcp3008"}], "]"}], 
+  ";"}], "\n", 
+ RowBox[{
+  RowBox[{"nchannels", "=", "8"}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"npoints", "=", " ", 
+    RowBox[{"5", "*", "60", "*", "2"}]}], ";"}], 
+  RowBox[{"(*", 
+   RowBox[{
+    RowBox[{
+     RowBox[{
+     "we", " ", "will", " ", "get", " ", "this", " ", "max", " ", "number", 
+      " ", "of", " ", "time", " ", "values", "*"}], ".."}], "5", "mins"}], 
+   "*)"}]}], "\n", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"dt", " ", "=", " ", 
+    RowBox[{"500000", "-", "2000"}]}], ";"}], " ", 
+  RowBox[{"(*", 
+   RowBox[{
+   "5", " ", "mseconds", " ", "is", " ", "the", " ", "goal", " ", "but", " ", 
+    "we", " ", "subtract", " ", "a", " ", "1.7", " ", "msec", " ", "for", " ",
+     "the", " ", "program", " ", "overhead"}], "*)"}], "\n", 
+  RowBox[{"(*", 
+   RowBox[{
+   "create", " ", "a", " ", "file", " ", "stream", " ", "object", " ", 
+    "using", " ", "a", " ", "log", " ", "file", " ", "to", " ", "increment", 
+    " ", "the", " ", "same", " ", "day"}], "*)"}]}], "\n", 
+ RowBox[{
+  RowBox[{"logname", "=", " ", "\"\</home/pi/8channels.log\>\""}], 
+  ";"}], "\n", 
+ RowBox[{
+  RowBox[{"lognumber", "=", 
+   RowBox[{
+    RowBox[{"Import", "[", 
+     RowBox[{"logname", ",", "\"\<List\>\""}], "]"}], "[", 
+    RowBox[{"[", "1", "]"}], "]"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{"lognumber", " ", "=", " ", 
+   RowBox[{"lognumber", " ", "+", "1"}]}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"Export", "[", 
+    RowBox[{"logname", ",", "lognumber", ",", "\"\<List\>\""}], "]"}], ";"}], 
+  " ", "\n"}], "\n", 
+ RowBox[{
+  RowBox[{"d", "=", 
+   RowBox[{"Date", "[", "]"}]}], ";"}]}], "Code",
+ InitializationCell->False,
+ CellChangeTimes->{{3.6718437596889963`*^9, 3.671843772907173*^9}, {
+   3.673719541555064*^9, 3.6737195568282433`*^9}, 3.6737197734912357`*^9, {
+   3.6737202706028423`*^9, 3.6737202711621304`*^9}, {3.674009778018961*^9, 
+   3.67400981733108*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData["\<\"8channels.m ..Looking for switch for 30 seconds..\"\>"], \
+"Print",
+ CellChangeTimes->{3.67184380377497*^9, 3.671843865819644*^9, 
+  3.6737196881493473`*^9, 3.673719800153825*^9, 3.67372012229958*^9, 
+  3.673720281247259*^9, 3.673721249460207*^9, 3.673721389757917*^9, 
+  3.6737224326881332`*^9, 3.673722698542665*^9, 3.673724001859642*^9, 
+  3.6737478038324947`*^9, 3.6737480412814007`*^9, 3.6737481968044662`*^9, 
+  3.6740098469355097`*^9, 3.675782248391184*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"The link is \"\>", "\[InvisibleSpace]", 
+   InterpretationBox[
+    RowBox[{
+     TagBox["LinkObject",
+      "SummaryHead"], "[", 
+     DynamicModuleBox[{Typeset`open$$ = False}, 
+      PanelBox[
+       PaneSelectorBox[{False->GridBox[{
+          {
+           PaneBox[
+            ButtonBox[
+             
+             DynamicBox[FEPrivate`FrontEndResource[
+              "FEBitmaps", "SquarePlusIconMedium"],
+              ImageSizeCache->{12., {0., 12.}}],
+             Appearance->None,
+             ButtonFunction:>(Typeset`open$$ = True),
+             Evaluator->Automatic,
+             Method->"Preemptive"],
+            Alignment->{Center, Center},
+            
+            ImageSize->
+             Dynamic[{
+              Automatic, 3.5 CurrentValue["FontCapHeight"]/
+               AbsoluteCurrentValue[Magnification]}]], 
+           GraphicsBox[
+            {Thickness[0.038461538461538464`], 
+             {FaceForm[{GrayLevel[0.93], Opacity[1.]}], 
+              FilledCurveBox[{{{1, 4, 3}, {0, 1, 0}, {1, 3, 3}, {0, 1, 0}, {1,
+                3, 3}, {0, 1, 0}, {1, 3, 3}, {0, 1, 0}}}, {{{
+               25.499999999999996`, 2.5}, {25.499999999999996`, 
+               1.3953100000000003`}, {24.604699999999998`, 
+               0.49999999999999994`}, {23.5, 0.49999999999999994`}, {2.5, 
+               0.49999999999999994`}, {1.3953100000000003`, 
+               0.49999999999999994`}, {0.49999999999999994`, 
+               1.3953100000000003`}, {0.49999999999999994`, 2.5}, {
+               0.49999999999999994`, 23.5}, {0.49999999999999994`, 
+               24.604699999999998`}, {1.3953100000000003`, 
+               25.499999999999996`}, {2.5, 25.499999999999996`}, {23.5, 
+               25.499999999999996`}, {24.604699999999998`, 
+               25.499999999999996`}, {25.499999999999996`, 
+               24.604699999999998`}, {25.499999999999996`, 23.5}, {
+               25.499999999999996`, 2.5}}}]}, 
+             {FaceForm[{RGBColor[0.5, 0.5, 0.5], Opacity[1.]}], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}, {0, 1, 0}}}, {{{20.5426, 
+               19.116799999999998`}, {16.3832, 21.876199999999997`}, {16.3832,
+                20.021499999999996`}, {6.930469999999999, 
+               20.021499999999996`}, {6.930469999999999, 
+               18.212100000000003`}, {16.3832, 18.212100000000003`}, {16.3832,
+                16.357399999999995`}, {20.5426, 19.116799999999998`}}}], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}, {0, 1, 0}}}, {{{5.30508, 13.8391}, {9.46445,
+                11.079700000000003`}, {9.46445, 12.933999999999997`}, {
+               18.917199999999998`, 12.933999999999997`}, {
+               18.917199999999998`, 14.7438}, {9.46445, 14.7438}, {9.46445, 
+               16.598}, {5.30508, 13.8391}}}], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}, {0, 1, 0}}}, {{{5.30508, 13.8391}, {9.46445,
+                11.079700000000003`}, {9.46445, 12.933999999999997`}, {
+               18.917199999999998`, 12.933999999999997`}, {
+               18.917199999999998`, 14.7438}, {9.46445, 14.7438}, {9.46445, 
+               16.598}, {5.30508, 13.8391}}}], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 
+               0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 
+               1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}}}, CompressedData["
+1:eJxTTMoPSmVmYGBgBGIRIGYC4sIjUTVcAooO8+XdOPpnKDg8YkwNXuen7JA2
+W/qycJSgw5sbHEde31CB82PFhGf3n1V1aFVgVz0zR8oBrF9czWFHsFXE/9Wy
+Dje0Dj4qiFWDy7cVLYptDVKH65/g6Xbu0HMNOB9sn4I23H6w+SWacD5De8DS
+tDQNB7ldC/alskg4aD2+nx6joeFgnPFi/oMZog5B9vlaQa/UHao9k7f0KUhA
++D/UUPVbqML5jCB+oIpDzJHypGv8Eg4eGad3ikiqwM2T57H5LndPGW6eya7m
+GzMvKcH1o4cXABG3d/Y=
+               "]], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}}}, {{{14.163129999999999`, 
+               4.337966249999999}, {16.96813, 4.337966249999999}, {16.96813, 
+               5.047809999999999}, {14.98813, 5.047809999999999}, {14.98813, 
+               8.29796625}, {14.163129999999999`, 8.29796625}, {
+               14.163129999999999`, 4.337966249999999}}}]}},
+            AspectRatio->1,
+            Axes->False,
+            Background->GrayLevel[0.93],
+            Frame->True,
+            FrameStyle->Directive[
+              Thickness[Tiny], 
+              GrayLevel[0.7]],
+            FrameTicks->None,
+            ImageSize->{Automatic, 
+              Dynamic[
+              3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                Magnification]), ImageSizeCache -> {45., {0., 9.}}]}], 
+           GridBox[{
+             {
+              RowBox[{
+               TagBox["\<\"Name: \"\>",
+                "SummaryItemAnnotation"], "\[InvisibleSpace]", 
+               TagBox[
+                StyleBox[
+                 
+                 PaneBox["\<\"'/home/pi/projects/ML_spidev_mcp3008/ML_spidev_\
+mcp3008'\"\>",
+                  BaselinePosition->Baseline,
+                  ContentPadding->False,
+                  FrameMargins->0,
+                  ImageSize->{{1, 300}, Automatic},
+                  ScrollPosition->{0., 0.},
+                  StripOnInput->True],
+                 LineBreakWithin->False],
+                "SummaryItem"]}]},
+             {
+              RowBox[{
+               TagBox["\<\"Link mode: \"\>",
+                "SummaryItemAnnotation"], "\[InvisibleSpace]", 
+               TagBox["Listen",
+                "SummaryItem"]}]}
+            },
+            AutoDelete->False,
+            
+            BaseStyle->{
+             ShowStringCharacters -> False, NumberMarks -> False, 
+              PrintPrecision -> 3, ShowSyntaxStyles -> False},
+            GridBoxAlignment->{"Columns" -> {{Left}}, "Rows" -> {{Automatic}}},
+            
+            GridBoxItemSize->{
+             "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}},
+            GridBoxSpacings->{"Columns" -> {{2}}, "Rows" -> {{Automatic}}}]}
+         },
+         AutoDelete->False,
+         BaselinePosition->{1, 1},
+         GridBoxAlignment->{"Rows" -> {{Top}}},
+         GridBoxItemSize->{
+          "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}], True->
+        GridBox[{
+          {
+           PaneBox[
+            ButtonBox[
+             DynamicBox[FEPrivate`FrontEndResource[
+              "FEBitmaps", "SquareMinusIconMedium"]],
+             Appearance->None,
+             ButtonFunction:>(Typeset`open$$ = False),
+             Evaluator->Automatic,
+             Method->"Preemptive"],
+            Alignment->{Center, Center},
+            
+            ImageSize->
+             Dynamic[{
+              Automatic, 3.5 CurrentValue["FontCapHeight"]/
+               AbsoluteCurrentValue[Magnification]}]], 
+           GraphicsBox[
+            {Thickness[0.038461538461538464`], 
+             {FaceForm[{GrayLevel[0.93], Opacity[1.]}], 
+              FilledCurveBox[{{{1, 4, 3}, {0, 1, 0}, {1, 3, 3}, {0, 1, 0}, {1,
+                3, 3}, {0, 1, 0}, {1, 3, 3}, {0, 1, 0}}}, {{{
+               25.499999999999996`, 2.5}, {25.499999999999996`, 
+               1.3953100000000003`}, {24.604699999999998`, 
+               0.49999999999999994`}, {23.5, 0.49999999999999994`}, {2.5, 
+               0.49999999999999994`}, {1.3953100000000003`, 
+               0.49999999999999994`}, {0.49999999999999994`, 
+               1.3953100000000003`}, {0.49999999999999994`, 2.5}, {
+               0.49999999999999994`, 23.5}, {0.49999999999999994`, 
+               24.604699999999998`}, {1.3953100000000003`, 
+               25.499999999999996`}, {2.5, 25.499999999999996`}, {23.5, 
+               25.499999999999996`}, {24.604699999999998`, 
+               25.499999999999996`}, {25.499999999999996`, 
+               24.604699999999998`}, {25.499999999999996`, 23.5}, {
+               25.499999999999996`, 2.5}}}]}, 
+             {FaceForm[{RGBColor[0.5, 0.5, 0.5], Opacity[1.]}], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}, {0, 1, 0}}}, {{{20.5426, 
+               19.116799999999998`}, {16.3832, 21.876199999999997`}, {16.3832,
+                20.021499999999996`}, {6.930469999999999, 
+               20.021499999999996`}, {6.930469999999999, 
+               18.212100000000003`}, {16.3832, 18.212100000000003`}, {16.3832,
+                16.357399999999995`}, {20.5426, 19.116799999999998`}}}], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}, {0, 1, 0}}}, {{{5.30508, 13.8391}, {9.46445,
+                11.079700000000003`}, {9.46445, 12.933999999999997`}, {
+               18.917199999999998`, 12.933999999999997`}, {
+               18.917199999999998`, 14.7438}, {9.46445, 14.7438}, {9.46445, 
+               16.598}, {5.30508, 13.8391}}}], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}, {0, 1, 0}}}, {{{5.30508, 13.8391}, {9.46445,
+                11.079700000000003`}, {9.46445, 12.933999999999997`}, {
+               18.917199999999998`, 12.933999999999997`}, {
+               18.917199999999998`, 14.7438}, {9.46445, 14.7438}, {9.46445, 
+               16.598}, {5.30508, 13.8391}}}], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 
+               0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 
+               1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}}}, CompressedData["
+1:eJxTTMoPSmVmYGBgBGIRIGYC4sIjUTVcAooO8+XdOPpnKDg8YkwNXuen7JA2
+W/qycJSgw5sbHEde31CB82PFhGf3n1V1aFVgVz0zR8oBrF9czWFHsFXE/9Wy
+Dje0Dj4qiFWDy7cVLYptDVKH65/g6Xbu0HMNOB9sn4I23H6w+SWacD5De8DS
+tDQNB7ldC/alskg4aD2+nx6joeFgnPFi/oMZog5B9vlaQa/UHao9k7f0KUhA
++D/UUPVbqML5jCB+oIpDzJHypGv8Eg4eGad3ikiqwM2T57H5LndPGW6eya7m
+GzMvKcH1o4cXABG3d/Y=
+               "]], 
+              FilledCurveBox[{{{0, 2, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0,
+                1, 0}, {0, 1, 0}}}, {{{14.163129999999999`, 
+               4.337966249999999}, {16.96813, 4.337966249999999}, {16.96813, 
+               5.047809999999999}, {14.98813, 5.047809999999999}, {14.98813, 
+               8.29796625}, {14.163129999999999`, 8.29796625}, {
+               14.163129999999999`, 4.337966249999999}}}]}},
+            AspectRatio->1,
+            Axes->False,
+            Background->GrayLevel[0.93],
+            Frame->True,
+            FrameStyle->Directive[
+              Thickness[Tiny], 
+              GrayLevel[0.7]],
+            FrameTicks->None,
+            ImageSize->{Automatic, 
+              Dynamic[
+              3.5 (CurrentValue["FontCapHeight"]/AbsoluteCurrentValue[
+                Magnification]), ImageSizeCache -> {45., {0., 9.}}]}], 
+           GridBox[{
+             {
+              RowBox[{
+               TagBox["\<\"Name: \"\>",
+                "SummaryItemAnnotation"], "\[InvisibleSpace]", 
+               TagBox[
+                
+                PaneBox["\<\"'/home/pi/projects/ML_spidev_mcp3008/ML_spidev_\
+mcp3008'\"\>",
+                 BaselinePosition->Baseline,
+                 ContentPadding->False,
+                 FrameMargins->0,
+                 ImageSize->{{1, 500}, Automatic},
+                 StripOnInput->True],
+                "SummaryItem"]}]},
+             {
+              RowBox[{
+               TagBox["\<\"Link mode: \"\>",
+                "SummaryItemAnnotation"], "\[InvisibleSpace]", 
+               TagBox["Listen",
+                "SummaryItem"]}]},
+             {
+              RowBox[{
+               TagBox["\<\"Link protocol: \"\>",
+                "SummaryItemAnnotation"], "\[InvisibleSpace]", 
+               TagBox["\<\"SharedMemory\"\>",
+                "SummaryItem"]}]}
+            },
+            AutoDelete->False,
+            
+            BaseStyle->{
+             ShowStringCharacters -> False, NumberMarks -> False, 
+              PrintPrecision -> 3, ShowSyntaxStyles -> False},
+            GridBoxAlignment->{"Columns" -> {{Left}}, "Rows" -> {{Automatic}}},
+            
+            GridBoxItemSize->{
+             "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}},
+            GridBoxSpacings->{"Columns" -> {{2}}, "Rows" -> {{Automatic}}}]}
+         },
+         AutoDelete->False,
+         BaselinePosition->{1, 1},
+         GridBoxAlignment->{"Rows" -> {{Top}}},
+         GridBoxItemSize->{
+          "Columns" -> {{Automatic}}, "Rows" -> {{Automatic}}}]}, Dynamic[
+        Typeset`open$$],
+        ImageSize->Automatic],
+       BaselinePosition->Baseline],
+      DynamicModuleValues:>{}], "]"}],
+    LinkObject[
+    "'/home/pi/projects/ML_spidev_mcp3008/ML_spidev_mcp3008'", 153, 4],
+    Editable->False,
+    SelectWithContents->True,
+    Selectable->False]}],
+  SequenceForm["The link is ", 
+   LinkObject[
+   "'/home/pi/projects/ML_spidev_mcp3008/ML_spidev_mcp3008'", 153, 4]],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.67184380377497*^9, 3.671843865819644*^9, 
+  3.6737196881493473`*^9, 3.673719800153825*^9, 3.67372012229958*^9, 
+  3.673720281247259*^9, 3.673721249460207*^9, 3.673721389757917*^9, 
+  3.6737224326881332`*^9, 3.673722698542665*^9, 3.673724001859642*^9, 
+  3.6737478038324947`*^9, 3.6737480412814007`*^9, 3.6737481968044662`*^9, 
+  3.6740098469355097`*^9, 3.675782249423162*^9}]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData["d"], "Input",
+ CellChangeTimes->{3.671843889898189*^9}],
+
+Cell[BoxData[
+ RowBox[{"{", 
+  RowBox[{
+  "2016", ",", "6", ",", "24", ",", "12", ",", "37", ",", 
+   "29.718744`8.225605432186711"}], "}"}]], "Output",
+ CellChangeTimes->{3.671843890646348*^9, 3.673719691500852*^9, 
+  3.673719802601623*^9, 3.673720124183895*^9, 3.673720283191115*^9, 
+  3.673721251234892*^9, 3.673721391515553*^9, 3.673722434379715*^9, 
+  3.673722700240863*^9, 3.673724003552622*^9, 3.673747807301469*^9, 
+  3.673748042875738*^9, 3.6737481983637047`*^9, 3.674009849072866*^9, 
+  3.675782250529313*^9}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"datename", "=", " ", 
+  RowBox[{"\"\</home/pi/\>\"", "<>", 
+   RowBox[{"ToString", "[", 
+    RowBox[{"d", "[", 
+     RowBox[{"[", "1", "]"}], "]"}], "]"}], "<>", "\"\<_\>\"", "<>", 
+   RowBox[{"ToString", "[", 
+    RowBox[{"d", "[", 
+     RowBox[{"[", "2", "]"}], "]"}], "]"}], "<>", "\"\<_\>\"", "<>", 
+   RowBox[{"ToString", "[", 
+    RowBox[{"d", "[", 
+     RowBox[{"[", "3", "]"}], "]"}], "]"}], "<>", "\"\<_\>\"", "<>", 
+   RowBox[{"ToString", "[", "lognumber", "]"}], "<>", 
+   "\"\<.dat\>\""}]}]], "Input",
+ CellChangeTimes->{3.671843927711623*^9}],
+
+Cell[BoxData["\<\"/home/pi/2016_6_24_26.dat\"\>"], "Output",
+ CellChangeTimes->{3.671843929257765*^9, 3.673719691939336*^9, 
+  3.67371980306999*^9, 3.673720124236557*^9, 3.673720283343938*^9, 
+  3.67372125156376*^9, 3.673721391867776*^9, 3.6737224347646646`*^9, 
+  3.673722700607554*^9, 3.67372400387922*^9, 3.6737478076397877`*^9, 
+  3.67374804328546*^9, 3.673748198624899*^9, 3.6740098491855164`*^9, 
+  3.675782250829822*^9}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"\n", 
+  RowBox[{
+   RowBox[{
+    RowBox[{"datename", "=", " ", 
+     RowBox[{"\"\</home/pi/\>\"", "<>", 
+      RowBox[{"ToString", "[", 
+       RowBox[{"d", "[", 
+        RowBox[{"[", "1", "]"}], "]"}], "]"}], "<>", "\"\<_\>\"", "<>", 
+      RowBox[{"ToString", "[", 
+       RowBox[{"d", "[", 
+        RowBox[{"[", "2", "]"}], "]"}], "]"}], "<>", "\"\<_\>\"", "<>", 
+      RowBox[{"ToString", "[", 
+       RowBox[{"d", "[", 
+        RowBox[{"[", "3", "]"}], "]"}], "]"}], "<>", "\"\<_\>\"", "<>", 
+      RowBox[{"ToString", "[", "lognumber", "]"}], "<>", "\"\<.dat\>\""}]}], 
+    ";"}], "\n", 
+   RowBox[{
+    RowBox[{"Print", "[", 
+     RowBox[{
+     "\"\<File \>\"", ",", "datename", ",", "\"\< will have size \>\"", ",", 
+      " ", 
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{"10.0", "/", "7.0"}], ")"}], "*", "192.0", "*", 
+       RowBox[{"npoints", "/", 
+        RowBox[{"(", 
+         RowBox[{"60", "*", "200"}], ")"}]}]}], ",", "\"\< KB\>\""}], "]"}], 
+    ";"}], "\n", 
+   RowBox[{
+    RowBox[{"s", " ", "=", " ", 
+     RowBox[{"OpenWrite", "[", "datename", "]"}]}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"adc", "=", 
+     RowBox[{"SPIDevMcp3008", "[", 
+      RowBox[{"nchannels", ",", "dt"}], "]"}]}], ";"}], "\n", 
+   RowBox[{"(*", 
+    RowBox[{
+    "take", " ", "one", " ", "measurement", " ", "and", " ", "establish", " ",
+      "a", " ", "zero", " ", "time", " ", "using", " ", "the", " ", "time", 
+     " ", "values", " ", "returned"}], "*)"}], "\n", 
+   RowBox[{
+    RowBox[{"is", " ", "=", " ", 
+     RowBox[{"nchannels", "+", "1"}]}], ";", 
+    RowBox[{"ius", " ", "=", " ", 
+     RowBox[{"nchannels", " ", "+", " ", "2"}]}], ";"}], "\n", 
+   RowBox[{"(*", 
+    RowBox[{
+     RowBox[{
+     "these", " ", "are", " ", "indexes", " ", "into", " ", "the", " ", 
+      "list", " ", "to", " ", "get", " ", "the", " ", "seconds"}], ",", " ", 
+     RowBox[{"and", " ", "microseconds", " ", "returned"}]}], "*)"}], "\n", 
+   RowBox[{
+    RowBox[{"t0secs", " ", "=", " ", 
+     RowBox[{"adc", "[", 
+      RowBox[{"[", "is", "]"}], "]"}]}], ";", 
+    RowBox[{"t0usecs", " ", "=", " ", 
+     RowBox[{"adc", "[", 
+      RowBox[{"[", "ius", "]"}], "]"}]}], ";"}], "\n", "\n", 
+   RowBox[{
+    RowBox[{"Do", "[", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"adc", "=", 
+        RowBox[{"SPIDevMcp3008", "[", 
+         RowBox[{"nchannels", ",", "dt"}], "]"}]}], ";", "\n", 
+       RowBox[{"(*", 
+        RowBox[{
+         RowBox[{
+         "convert", " ", "the", " ", "seconds", " ", "elapsed", " ", "to", 
+          " ", "microseconds"}], ",", " ", 
+         RowBox[{
+         "as", " ", "these", " ", "are", " ", "the", " ", "units", " ", 
+          "required"}]}], "*)"}], 
+       RowBox[{"(*", 
+        RowBox[{
+         RowBox[{
+         "write", " ", "the", " ", "time", " ", "in", " ", "microseconds"}], 
+         ",", " ", 
+         RowBox[{
+         "and", " ", "the", " ", "channel", " ", "values", " ", "to", " ", 
+          "the", " ", "a", " ", "list"}], ",", " ", 
+         RowBox[{
+         "and", " ", "write", " ", "the", " ", "list", " ", "to", " ", "a", 
+          " ", "file"}], ",", " ", 
+         RowBox[{
+         "and", " ", "repeat", " ", "from", " ", "1", " ", "to", " ", 
+          "npoints"}]}], "*)"}], "\n", "  ", 
+       RowBox[{"WriteString", "[", 
+        RowBox[{"s", ",", 
+         RowBox[{"adc", "[", 
+          RowBox[{"[", "1", "]"}], "]"}], ",", "\"\< \>\"", ",", 
+         RowBox[{"adc", "[", 
+          RowBox[{"[", "2", "]"}], "]"}], ",", "\"\< \>\"", ",", 
+         RowBox[{"adc", "[", 
+          RowBox[{"[", "3", "]"}], "]"}], ",", "\"\< \>\"", ",", 
+         RowBox[{"adc", "[", 
+          RowBox[{"[", "4", "]"}], "]"}], ",", "\"\< \>\"", ",", 
+         RowBox[{"adc", "[", 
+          RowBox[{"[", "5", "]"}], "]"}], ",", "\"\< \>\"", ",", 
+         RowBox[{"adc", "[", 
+          RowBox[{"[", "6", "]"}], "]"}], ",", "\"\< \>\"", ",", 
+         RowBox[{"adc", "[", 
+          RowBox[{"[", "7", "]"}], "]"}], ",", "\"\< \>\"", ",", 
+         RowBox[{"adc", "[", 
+          RowBox[{"[", "8", "]"}], "]"}], ",", "\"\<\\n\>\""}], "]"}], ";", 
+       "\n", 
+       RowBox[{"(*", 
+        RowBox[{"scan", " ", "for", " ", "switch"}], "*)"}], "\n", "  ", 
+       RowBox[{"If", "[", 
+        RowBox[{
+         RowBox[{
+          RowBox[{"Mod", "[", 
+           RowBox[{"i", ",", "20"}], "]"}], "==", "0"}], ",", " ", 
+         RowBox[{"(*", 
+          RowBox[{
+           RowBox[{"check", " ", "takes", " ", "5", "ms"}], ",", " ", 
+           RowBox[{"called", " ", "every", " ", "10", " ", "seconds"}], ",", 
+           " ", 
+           RowBox[{"interrupts", " ", "one", " ", "data", " ", "point"}]}], 
+          "*)"}], "\n", "    ", 
+         RowBox[{
+          RowBox[{"gpio22in", " ", "=", 
+           RowBox[{"22", "/.", 
+            RowBox[{"DeviceRead", "[", 
+             RowBox[{"\"\<GPIO\>\"", ",", "22"}], "]"}]}]}], ";", "\n", 
+          "    ", 
+          RowBox[{"(*", 
+           RowBox[{
+            RowBox[{"If", " ", "hi"}], ",", " ", 
+            RowBox[{"Turn", " ", "off", " ", "the", " ", "LED"}], ",", " ", 
+            RowBox[{"we", " ", "are", " ", "done"}]}], "*)"}], "\n", "    ", 
+          RowBox[{"If", "[", 
+           RowBox[{
+            RowBox[{"gpio22in", "==", "0"}], ",", 
+            RowBox[{
+             RowBox[{"DeviceWrite", "[", 
+              RowBox[{"\"\<GPIO\>\"", ",", 
+               RowBox[{"17", "->", "0"}]}], "]"}], ";", 
+             RowBox[{"npoints", "=", " ", "i"}], ";", 
+             RowBox[{"Break", "[", "]"}]}]}], "]"}]}]}], "\n", "  ", "]"}], 
+       ";"}], "\n", ",", " ", 
+      RowBox[{"{", 
+       RowBox[{"i", ",", "1", ",", "npoints"}], "}"}]}], "]"}], ";"}], "\n", 
+   "\n", 
+   RowBox[{
+    RowBox[{"DeviceWrite", "[", 
+     RowBox[{"\"\<GPIO\>\"", ",", 
+      RowBox[{"17", "->", "0"}]}], "]"}], ";"}], "  ", 
+   RowBox[{"(*", 
+    RowBox[{
+     RowBox[{"We", " ", "are", " ", "done"}], ",", 
+     RowBox[{"turn", " ", "off", " ", "the", " ", "LED"}]}], "*)"}], "\n", 
+   RowBox[{
+    RowBox[{"tusecs", " ", "=", " ", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{
+         RowBox[{"adc", "[", 
+          RowBox[{"[", "is", "]"}], "]"}], "-", "t0secs"}], ")"}], "*", 
+       "1000000"}], "+", " ", 
+      RowBox[{"(", 
+       RowBox[{
+        RowBox[{"adc", "[", 
+         RowBox[{"[", "ius", "]"}], "]"}], " ", "-", "t0usecs"}], ")"}]}]}], 
+    ";"}], "\n", 
+   RowBox[{
+    RowBox[{"framemsecs", "=", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{"tusecs", " ", "-", " ", "t0usecs"}], ")"}], "/", 
+       RowBox[{"(", "npoints", ")"}]}], "/", "1000."}]}], ";"}], "\n", 
+   RowBox[{"(*", 
+    RowBox[{
+     RowBox[{"Print", " ", "out", " ", "our", " ", "result"}], ",", " ", 
+     RowBox[{
+     "and", " ", "then", " ", "plot", " ", "the", " ", "time", " ", "versus", 
+      " ", "point", " ", "number"}], ",", " ", 
+     RowBox[{"and", " ", "the", " ", "data", " ", "versus", " ", "time"}]}], 
+    "*)"}], "\n", 
+   RowBox[{
+    RowBox[{"Print", "[", 
+     RowBox[{"\"\<For \>\"", ",", 
+      RowBox[{"is", "-", "1"}], ",", "\"\< channels, the frame time is \>\"", 
+      ",", "framemsecs", ",", "\"\< ms.\>\""}], "]"}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"Close", "[", "s", "]"}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"descriptionname", " ", "=", " ", 
+     RowBox[{"datename", "<>", "\"\<.txt\>\""}]}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"descriptionlist", " ", "=", " ", 
+     RowBox[{"{", 
+      RowBox[{"t0secs", ",", "t0usecs", ",", 
+       RowBox[{"adc", "[", 
+        RowBox[{"[", "is", "]"}], "]"}], ",", 
+       RowBox[{"adc", "[", 
+        RowBox[{"[", "ius", "]"}], "]"}], " ", ",", "npoints"}], "}"}]}], 
+    ";"}], "\n", 
+   RowBox[{
+    RowBox[{"Export", "[", 
+     RowBox[{"descriptionname", ",", "descriptionlist"}], "]"}], ";"}], "\n", 
+   
+   RowBox[{
+    RowBox[{"Print", "[", "\"\<8channels.m is complete!\>\"", "]"}], ";"}], 
+   "\n", 
+   RowBox[{
+    RowBox[{"Pause", "[", "2", "]"}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"Exit", "[", "]"}], ";"}], "\n"}]}]], "Code",
+ InitializationCell->False,
+ CellChangeTimes->{{3.6718439021190987`*^9, 3.671843902545225*^9}, {
+   3.671844279953933*^9, 3.67184428652429*^9}, {3.6718445787869253`*^9, 
+   3.671844579330179*^9}, 3.673719510768705*^9, {3.673719617195669*^9, 
+   3.673719627195663*^9}, 3.673719659634922*^9, {3.67371974445252*^9, 
+   3.67371974790823*^9}, {3.673720091599598*^9, 3.6737201059643927`*^9}, {
+   3.673724469906926*^9, 3.673724495378994*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"File \"\>", 
+   "\[InvisibleSpace]", "\<\"/home/pi/2016_6_24_26.dat\"\>", 
+   "\[InvisibleSpace]", "\<\" will have size \"\>", "\[InvisibleSpace]", 
+   "13.714285714285712`", "\[InvisibleSpace]", "\<\" KB\"\>"}],
+  SequenceForm[
+  "File ", "/home/pi/2016_6_24_26.dat", " will have size ", 
+   13.714285714285712`, " KB"],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.671844014560577*^9, 3.6737196923875713`*^9, 
+  3.673719803377697*^9, 3.673720125199356*^9, 3.673720284118284*^9, 
+  3.673721252712171*^9, 3.67372139274755*^9, 3.673722435850802*^9, 
+  3.6737227016760483`*^9, 3.6737240049256477`*^9, 3.673747807973373*^9, 
+  3.673748044095097*^9, 3.673748199251932*^9, 3.674009849512534*^9, 
+  3.675782251425294*^9}],
+
+Cell[BoxData[
+ InterpretationBox[
+  RowBox[{"\<\"For \"\>", "\[InvisibleSpace]", "8", 
+   "\[InvisibleSpace]", "\<\" channels, the frame time is \"\>", 
+   "\[InvisibleSpace]", "509.35789166666666`", 
+   "\[InvisibleSpace]", "\<\" ms.\"\>"}],
+  SequenceForm[
+  "For ", 8, " channels, the frame time is ", 509.35789166666666`, " ms."],
+  Editable->False]], "Print",
+ CellChangeTimes->{3.671844014560577*^9, 3.6737196923875713`*^9, 
+  3.673719803377697*^9, 3.673720125199356*^9, 3.673720284118284*^9, 
+  3.673721252712171*^9, 3.67372139274755*^9, 3.673722435850802*^9, 
+  3.6737227016760483`*^9, 3.6737240049256477`*^9, 3.673747807973373*^9, 
+  3.673748044095097*^9, 3.673748199251932*^9, 3.674009849512534*^9, 
+  3.675782313975111*^9}],
+
+Cell[BoxData["\<\"8channels.m is complete!\"\>"], "Print",
+ CellChangeTimes->{3.671844014560577*^9, 3.6737196923875713`*^9, 
+  3.673719803377697*^9, 3.673720125199356*^9, 3.673720284118284*^9, 
+  3.673721252712171*^9, 3.67372139274755*^9, 3.673722435850802*^9, 
+  3.6737227016760483`*^9, 3.6737240049256477`*^9, 3.673747807973373*^9, 
+  3.673748044095097*^9, 3.673748199251932*^9, 3.674009849512534*^9, 
+  3.67578231439347*^9}]
+}, Open  ]]
+}, Open  ]]
+},
+WindowSize->{1303, 839},
+WindowMargins->{{Automatic, 242}, {Automatic, -5}},
+FrontEndVersion->"10.0 for Linux ARM (32-bit) (February 3, 2015)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[558, 20, 401, 8, 50, "Input"],
+Cell[CellGroupData[{
+Cell[984, 32, 3864, 112, 484, "Code",
+ InitializationCell->False],
+Cell[CellGroupData[{
+Cell[4873, 148, 482, 7, 22, "Print"],
+Cell[5358, 157, 13556, 280, 58, "Print"]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[18963, 443, 69, 1, 30, "Input"],
+Cell[19035, 446, 519, 10, 30, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[19591, 461, 579, 14, 32, "Input"],
+Cell[20173, 477, 427, 6, 30, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[20637, 488, 8527, 218, 646, "Code",
+ InitializationCell->False],
+Cell[CellGroupData[{
+Cell[29189, 710, 770, 15, 22, "Print"],
+Cell[29962, 727, 734, 14, 22, "Print"],
+Cell[30699, 743, 427, 6, 22, "Print"]
+}, Open  ]]
+}, Open  ]]
+}
+]
+*)
+
+(* End of internal cache information *)
