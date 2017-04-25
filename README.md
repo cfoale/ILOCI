@@ -19,3 +19,15 @@ The code enables the RPi2 to
 
 The two zip files now contain software for the sender and receiver respectively.
 The sender contains RunILOCIv0.9Sim.nb and the receiver contains SerialListenDisplay.nb so that the two RPi2's can be setup to exchange simulated data without the analog mcp3008 chip and board attached to the sender.  The bluetooth adapters were purchased from Amazon, Kinivo BTD-400 Bluetooth 4.0 USB Adapter for Windows 10 / 8.1 / 8 / 7 / Vista
+
+4/24/2017  For testing the classifier without the MCP3008 SPI interface, a test flight data file 2016_6_25_28.dat is provided.  
+
+Use the notebook ILOCITrainingVerificationSets-Test7.nbto create the ILOCITest7Classifier.m classifier file with the data file.
+
+The data file can be played back to the RECEIVER, over Bluetooth, using the SENDER notebook ReRunILOCIv0.9.nb.  
+
+Script file RunILOCIv0.9.m is loaded by the startwolfram init.d script at boot up of the RPi2, and has comments and changes to allow execution for simulation. It has functionality illustrated in the notebook RunILOCIv0.9.nb
+
+Files 8channels*.m are SENDER scripts used by startwolfram init.d script to only record flight data, but not to analyze with Classify, or send to the RECEIVER
+
+Notebooks 8channels*.nb illustrate the development of their respectively named scripts.

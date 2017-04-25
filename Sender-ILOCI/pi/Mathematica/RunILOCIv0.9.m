@@ -12,6 +12,8 @@ Print["RunILOCIv0.9.m ..Looking for switch for 30 seconds.."];
 (*Pause 30 seconds while waiting for the switch*)
 Do[
   gpio22in =22/.DeviceRead["GPIO",22];
+(*SIMULATED mcp3008 board*)
+  gpio22in=0 (*0 exits*);
   If[gpio22in==1,
     DeviceWrite["GPIO",17->1];(*turn the LED on*)
 	Break[]
@@ -46,7 +48,7 @@ csvfilepath="/home/pi/Mathematica/";
 classifierfile = csvfilepath <> "ILOCITest8Classifier.m";
 
 (*****data recording*)
-frametime=0.2; (*5 Hz *)
+frametime=0.2;
 (*dt=frametime*10^*6 -2200 *)
 dt = Floor[frametime*1000000-2000]; (*SPIDevMcp3008 requires an integer parameter*)(*200 mseconds is the goal but we subtract a 2 msec for the program overhead*)
 datename= "/home/pi/Mathematica/"<>ToString[d[[1]]]<>"_"<>ToString[d[[2]]]<>"_"<>ToString[d[[3]]]<>"_"<>ToString[lognumber]<>".dat";
@@ -86,8 +88,7 @@ probL=Part[pL/@realdata,1];
 If[probL < 0.0001,probL=0.];(*make really small numbers zero*)
 probR=Part[pR/@realdata,1];
 If[probR < 0.0001,probR=0.];(*make really small numbers zero*)
-(*add a leading digit to probN based on the action required,
-as an action responsed code to be displayed with a corresponding text message by the Receiver*)
+(*add a leading digit to probN based on the action required*)
 paction=0.5;
 If[probD > paction,probN=probN+2.0];
 If[probL > paction,probN=probN+3.0];
@@ -196,7 +197,7 @@ processCommand[]:=Module[{result},
 "CMD1",saveUpdatePairs[],
          "CMD2",Print["Exiting.. for CMD2"];
              PutAppend[DateString[]<>":Exiting ",logfilename];
-stopsending=True;rfcomm[HALT],
+stopsending=True;runiloci=False,(*this formerly had RFCOMM(HALT), which shutdown RPi2 completely*)
 "CMD3",Print["pauseSending[30] not implemented"]
    ];
 ];
@@ -224,15 +225,13 @@ Put[updatedata,updatefilename];
 ];
 
 
+
 (*Initialize - one time Executable *)
 
 (*Setup the update pair list*)
-(*as determined by the listener display horizontal pixel count*)
-listenerdisplaypoints = 120;
-(*needs to be defined in one place*)
+(*as determined by the listener display horizontal pixel count*)listenerdisplaypoints = 120;(*needs to be defined in one place*)
 ILOCIperiod = 10.0; (*time in seconds used to create an ILOCI training rule set*)
-nupdates = ILOCIperiod/frametime;updatedata = {};
-(*a global list containing recent measurements for additional training*)
+nupdates = ILOCIperiod/frametime;updatedata = {};(*a global list containing recent measurements for additional training*)
 
 (*initialize the classifier*)
  (*Initialize the classify method*)
@@ -292,6 +291,8 @@ While[runiloci,
   (****debugging**)
   (*poll our physical switch to see if we should exit*)
   gpio22in =22/.DeviceRead["GPIO",22];
+  (*SIMULATED*)
+   gpio22in=1;
   If[gpio22in==0,
      DeviceWrite["GPIO",17->0];(*turn the LED off*)
  	stopsending = True;
@@ -304,8 +305,7 @@ While[runiloci,
  DeviceClose[commdev];
  rfcomm[HANGUP];
  Uninstall[linkrfcomm];
-] ;
-(*returns to upper While, repeats initialization*)
+] ;(*returns to upper While, repeats initialization*)
 tusecs = (adc[[is]]-t0secs)*1000000+ (adc[[ius]] -t0usecs);
 framemsecs=(tusecs - t0usecs)/(nframes)/1000.;
 Uninstall[linkmcp3008];
@@ -320,6 +320,9 @@ PutAppend[DateString[]<>":Frame time (ms) "<>ToString[framemsecs],logfilename];
 PutAppend[DateString[]<>":RunILOCIv0.9.m is complete",logfilename];
 Print["RunILOCIv0.9.m is complete."];
 Exit[]; 
+
+
+
 
 
 
